@@ -1,0 +1,302 @@
+<!DOCTYPE html>
+<html lang="pt-PT">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#f4f5f7">
+<title>PDF Calc</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon.svg">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/web/pdf_viewer.css">
+<style>
+:root{--bg:#f4f5f7;--surface:#fff;--text:#16181d;--muted:#6b707a;--line:#dfe2e7;--accent:#17191d;--success:#218739;--danger:#c62828}
+*{box-sizing:border-box}
+html,body{height:100%;margin:0;overflow-x:hidden;background:var(--bg);color:var(--text);font:16px/1.4 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+button{font:inherit;color:inherit;cursor:pointer}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.view{display:none;height:100%;flex-direction:column}
+.view.on{display:flex}
+header{display:flex;align-items:center;gap:8px;min-height:56px;padding:0 12px;padding-top:env(safe-area-inset-top);background:var(--surface);border-bottom:1px solid var(--line)}
+header h1{font-size:20px;margin:0;font-weight:650}
+header small{display:block;color:var(--muted);font-size:12px}
+.grow{flex:1;min-width:0}
+.ttl{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-weight:600}
+.ib{min-width:44px;height:44px;border:0;background:none;border-radius:10px;font-size:22px}
+.ib:active{background:var(--bg)}
+.ib:disabled{opacity:.35}
+.home{padding:16px;max-width:720px;width:100%;margin:0 auto;overflow-y:auto;flex:1}
+.open{width:100%;height:52px;border:0;border-radius:12px;background:var(--accent);color:#fff;font-weight:600}
+h2{font-size:14px;color:var(--muted);font-weight:600;margin:24px 0 8px}
+.card{display:flex;align-items:center;gap:12px;background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:12px;margin-bottom:8px}
+.card .main{flex:1;min-width:0;text-align:left;background:none;border:0;padding:0;display:flex;gap:12px;align-items:center}
+.pdfi{flex:none;width:40px;height:48px;border-radius:6px;background:#fdecea;color:var(--danger);font-size:11px;font-weight:700;display:grid;place-items:center}
+.nm{font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.sub{color:var(--muted);font-size:13px}
+.ok{color:var(--success)}.sv{color:var(--muted)}.er{color:var(--danger)}
+.del{border:1px solid var(--line);background:none;border-radius:8px;min-height:44px;padding:0 10px;font-size:13px;color:var(--muted)}
+.empty{color:var(--muted);text-align:center;padding:32px 0}
+.note{margin:12px 0 0;padding:10px 12px;border-radius:10px;background:var(--surface);border:1px solid var(--line);font-size:14px;color:var(--muted)}
+.st{font-size:13px;white-space:nowrap;padding:0 6px}
+#banner{display:none;align-items:center;gap:8px;padding:8px 12px;background:#fff8e1;border-bottom:1px solid var(--line);font-size:14px}
+#banner.on{display:flex}
+#banner span{flex:1}
+.stage{position:relative;flex:1;min-height:0}
+#vc{position:absolute;inset:0;overflow:auto;background:#e9ebef;-webkit-overflow-scrolling:touch}
+.bar{display:flex;justify-content:space-between;align-items:center;gap:4px;padding:4px 8px;padding-bottom:calc(4px + env(safe-area-inset-bottom));background:var(--surface);border-top:1px solid var(--line)}
+.bar div{display:flex;align-items:center;gap:2px}
+.bar .lbl{min-width:64px;text-align:center;font-size:14px;background:none;border:0;height:44px}
+#toast{position:fixed;left:50%;bottom:90px;transform:translateX(-50%);background:var(--accent);color:#fff;padding:8px 14px;border-radius:20px;font-size:13px;opacity:0;pointer-events:none;transition:opacity .2s;max-width:90vw}
+#toast.on{opacity:1}
+@media(max-width:340px){.bar .lbl{min-width:52px}.ib{min-width:40px}}
+</style>
+</head>
+<body>
+
+<section class="view on" id="home">
+  <header><div class="grow"><h1>PDF Calc</h1><small>Preencha. Calcule. Guarde.</small></div></header>
+  <div class="home">
+    <button class="open" id="btnOpen" aria-label="Abrir PDF">+ Abrir PDF</button>
+    <input type="file" id="file" accept="application/pdf,.pdf" hidden>
+    <div class="note" id="privacy" hidden>Os seus documentos permanecem neste dispositivo.</div>
+    <div class="note" id="homeMsg" hidden></div>
+    <h2>Documentos recentes</h2>
+    <div id="list"></div>
+  </div>
+</section>
+
+<section class="view" id="reader">
+  <header>
+    <button class="ib" id="back" aria-label="Voltar">‹</button>
+    <div class="grow ttl" id="title"></div>
+    <span class="st" id="st" role="status" aria-live="polite"></span>
+    <button class="ib" id="exp" aria-label="Exportar PDF preenchido" title="Exportar">↓</button>
+  </header>
+  <div id="banner"><span id="bannerTx"></span><button class="ib" id="bannerX" aria-label="Fechar aviso">×</button></div>
+  <div class="stage"><div id="vc"><div id="viewer" class="pdfViewer"></div></div></div>
+  <div class="bar">
+    <div><button class="ib" id="prev" aria-label="Página anterior">‹</button><span id="pg" aria-live="polite">– / –</span><button class="ib" id="next" aria-label="Página seguinte">›</button></div>
+    <div><button class="ib" id="zo" aria-label="Diminuir zoom">−</button><button class="lbl" id="zl" aria-label="Alternar ajuste à largura / página">100%</button><button class="ib" id="zi" aria-label="Aumentar zoom">+</button></div>
+  </div>
+</section>
+<div id="toast"></div>
+
+<script src="https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/web/pdf_viewer.js"></script>
+<script>
+(() => {
+'use strict';
+const $ = s => document.querySelector(s);
+const BASE = 'https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/';
+const MAX_BYTES = 150 * 1024 * 1024;
+
+/* ---------- IndexedDB ---------- */
+const dbp = new Promise((res, rej) => {
+  if (!window.indexedDB) return rej(new Error('no-idb'));
+  const r = indexedDB.open('pdfcalc', 1);
+  r.onupgradeneeded = () => { const d = r.result; d.createObjectStore('meta', {keyPath: 'id'}); d.createObjectStore('files', {keyPath: 'id'}); };
+  r.onsuccess = () => res(r.result);
+  r.onerror = () => rej(r.error);
+});
+const tx = (stores, mode, fn) => dbp.then(d => new Promise((res, rej) => {
+  const t = d.transaction(stores, mode); const q = fn(t);
+  t.oncomplete = () => res(q ? q.result : undefined);
+  t.onerror = t.onabort = () => rej(t.error || new Error('tx'));
+}));
+const listDocs = () => tx('meta', 'readonly', t => t.objectStore('meta').getAll());
+const getMeta = id => tx('meta', 'readonly', t => t.objectStore('meta').get(id));
+const getBytes = id => tx('files', 'readonly', t => t.objectStore('files').get(id));
+const putDoc = (meta, bytes) => tx(['meta', 'files'], 'readwrite', t => { t.objectStore('meta').put(meta); t.objectStore('files').put({id: meta.id, bytes}); });
+const delDoc = id => tx(['meta', 'files'], 'readwrite', t => { t.objectStore('meta').delete(id); t.objectStore('files').delete(id); });
+
+/* ---------- UI helpers ---------- */
+let toastT;
+function toast(m) { const e = $('#toast'); e.textContent = m; e.classList.add('on'); clearTimeout(toastT); toastT = setTimeout(() => e.classList.remove('on'), 2500); }
+function show(id) { document.querySelectorAll('.view').forEach(v => v.classList.toggle('on', v.id === id)); }
+function fmtDate(ts) {
+  const d = new Date(ts), n = new Date(), hm = d.toLocaleTimeString('pt-PT', {hour: '2-digit', minute: '2-digit'});
+  if (d.toDateString() === n.toDateString()) return 'Alterado hoje às ' + hm;
+  const y = new Date(n); y.setDate(n.getDate() - 1);
+  if (d.toDateString() === y.toDateString()) return 'Ontem às ' + hm;
+  return d.toLocaleDateString('pt-PT');
+}
+const fmtSize = b => b > 1048576 ? (b / 1048576).toFixed(1) + ' MB' : Math.max(1, Math.round(b / 1024)) + ' KB';
+const esc = s => s.replace(/[&<>"]/g, c => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;'}[c]));
+function setSt(s) {
+  const e = $('#st');
+  const m = {ok: ['✓ Guardado', 'ok'], sav: ['••• A guardar', 'sv'], err: ['! Não foi possível guardar', 'er']}[s];
+  e.textContent = m[0]; e.className = 'st ' + m[1];
+}
+function banner(t) { $('#bannerTx').textContent = t; $('#banner').classList.add('on'); }
+
+/* ---------- Home ---------- */
+async function renderHome() {
+  const box = $('#list');
+  try {
+    const docs = (await listDocs()).sort((a, b) => b.modified - a.modified);
+    box.innerHTML = docs.length ? '' : '<div class="empty">Ainda não abriu nenhum PDF.</div>';
+    docs.forEach(d => {
+      const c = document.createElement('div'); c.className = 'card';
+      c.innerHTML = `<button class="main" aria-label="Abrir ${esc(d.name)}"><span class="pdfi">PDF</span><span style="min-width:0"><div class="nm">${esc(d.name)}</div><div class="sub">${fmtDate(d.modified)} · ${fmtSize(d.size)}</div><div class="sub ok">✓ Guardado</div></span></button><button class="del" aria-label="Eliminar ${esc(d.name)} da aplicação">Eliminar da aplicação</button>`;
+      c.querySelector('.main').onclick = () => openDoc(d.id);
+      c.querySelector('.del').onclick = async () => {
+        if (!confirm('Eliminar "' + d.name + '" da aplicação? A cópia local e os valores guardados serão removidos. O ficheiro original não é apagado.')) return;
+        try { await delDoc(d.id); } catch (e) { toast('Não foi possível eliminar.'); }
+        renderHome();
+      };
+      box.appendChild(c);
+    });
+  } catch (e) {
+    box.innerHTML = '';
+    const m = $('#homeMsg'); m.hidden = false;
+    m.textContent = 'O armazenamento local não está disponível. Pode abrir PDFs, mas as alterações não serão guardadas.';
+  }
+}
+
+/* ---------- Viewer ---------- */
+const eventBus = new pdfjsViewer.EventBus();
+const linkService = new pdfjsViewer.PDFLinkService({eventBus});
+const scripting = new pdfjsViewer.PDFScriptingManager({eventBus, sandboxBundleSrc: BASE + 'build/pdf.sandbox.min.js'});
+pdfjsLib.GlobalWorkerOptions.workerSrc = BASE + 'build/pdf.worker.min.js';
+const viewer = new pdfjsViewer.PDFViewer({
+  container: $('#vc'), viewer: $('#viewer'), eventBus, linkService,
+  scriptingManager: scripting, enableScripting: true,
+  annotationMode: pdfjsLib.AnnotationMode.ENABLE_FORMS
+});
+linkService.setViewer(viewer); scripting.setViewer(viewer);
+
+let pdf = null, meta = null, dirty = false, tm = null, saving = false, fit = 'page-width', noStore = false;
+
+eventBus.on('pagesinit', () => { viewer.currentScaleValue = 'page-width'; fit = 'page-width'; zl(); });
+eventBus.on('pagechanging', e => { $('#pg').textContent = e.pageNumber + ' / ' + (pdf ? pdf.numPages : '–'); });
+eventBus.on('scalechanging', zl);
+function zl() { $('#zl').textContent = Math.round(viewer.currentScale * 100) + '%'; }
+
+function mark() {
+  if (!pdf || noStore) return;
+  dirty = true; setSt('sav');
+  clearTimeout(tm); tm = setTimeout(save, 700);
+}
+$('#vc').addEventListener('input', mark, true);
+$('#vc').addEventListener('change', mark, true);
+
+async function save() {
+  clearTimeout(tm);
+  if (!pdf || !dirty || saving || noStore) return;
+  saving = true; dirty = false;
+  const doc = pdf, m = meta;
+  try {
+    const out = await doc.saveDocument();
+    const bytes = new Uint8Array(out);
+    const nm = {...m, size: bytes.byteLength, modified: Date.now()};
+    await putDoc(nm, bytes);
+    if (doc === pdf) meta = nm;
+    if (!dirty) setSt('ok');
+  } catch (e) {
+    console.error('save failed', e);
+    dirty = true; setSt('err');
+  } finally {
+    saving = false;
+    if (dirty && doc === pdf && $('#st').className.indexOf('er') < 0) tm = setTimeout(save, 700);
+  }
+}
+
+async function closeDoc() {
+  clearTimeout(tm);
+  if (dirty) await save();
+  const d = pdf; pdf = null; meta = null; dirty = false;
+  try { viewer.setDocument(null); linkService.setDocument(null); } catch (e) {}
+  if (d) { try { await d.destroy(); } catch (e) {} }
+  $('#viewer').innerHTML = '';
+  $('#banner').classList.remove('on');
+}
+
+async function loadDoc(m, bytes) {
+  await closeDoc();
+  meta = m; $('#title').textContent = m.name; $('#pg').textContent = '– / –';
+  setSt('ok'); show('reader');
+  try {
+    const task = pdfjsLib.getDocument({data: bytes.slice(0), enableXfa: true});
+    pdf = await task.promise;
+  } catch (e) {
+    console.error(e); show('home');
+    const msg = e && e.name === 'PasswordException' ? 'Este PDF está protegido por palavra-passe e não pode ser aberto.'
+      : e && (e.name === 'InvalidPDFException' || e.name === 'FormatError') ? 'O ficheiro não é um PDF válido ou está corrompido.'
+      : 'Não foi possível abrir este PDF.';
+    const h = $('#homeMsg'); h.hidden = false; h.textContent = msg; meta = null; return;
+  }
+  try {
+    viewer.setDocument(pdf); linkService.setDocument(pdf);
+    pdf.annotationStorage.onSetModified = mark;
+    $('#pg').textContent = '1 / ' + pdf.numPages;
+    const [fields, js] = await Promise.all([pdf.getFieldObjects(), pdf.hasJSActions()]);
+    if (pdf.isPureXfa) banner('Este formulário usa uma tecnologia PDF (XFA) que este leitor pode não reproduzir completamente.');
+    else if (!fields || !Object.keys(fields).length) banner('Este PDF não possui campos preenchíveis.');
+    else if (js) banner('Este formulário tem cálculos em JavaScript, executados num ambiente isolado. Funções não suportadas neste dispositivo podem não ser reproduzidas.');
+  } catch (e) {
+    console.error(e); banner('Não foi possível apresentar este documento por completo.');
+  }
+}
+
+async function openDoc(id) {
+  try {
+    const [m, f] = await Promise.all([getMeta(id), getBytes(id)]);
+    if (!m || !f) throw new Error('missing');
+    noStore = false; await loadDoc(m, f.bytes);
+  } catch (e) { toast('Não foi possível abrir o documento guardado.'); renderHome(); }
+}
+
+/* ---------- Ações ---------- */
+$('#btnOpen').onclick = () => $('#file').click();
+$('#file').onchange = async e => {
+  const f = e.target.files[0]; e.target.value = '';
+  if (!f) return;
+  $('#homeMsg').hidden = true;
+  if (f.size > MAX_BYTES) { const h = $('#homeMsg'); h.hidden = false; h.textContent = 'O ficheiro é demasiado grande (máximo ' + fmtSize(MAX_BYTES) + ').'; return; }
+  try {
+    const bytes = new Uint8Array(await f.arrayBuffer());
+    const m = {id: (crypto.randomUUID ? crypto.randomUUID() : Date.now() + '-' + Math.random().toString(16).slice(2)), name: f.name, size: bytes.byteLength, modified: Date.now()};
+    noStore = false;
+    try { await putDoc(m, bytes); } catch (err) {
+      noStore = true; toast('Sem espaço ou armazenamento indisponível: alterações não serão guardadas.');
+    }
+    await loadDoc(m, bytes);
+    if (noStore) setSt('err');
+  } catch (err) { toast('Não foi possível ler o ficheiro.'); }
+};
+$('#back').onclick = async () => { await closeDoc(); show('home'); renderHome(); };
+$('#bannerX').onclick = () => $('#banner').classList.remove('on');
+$('#prev').onclick = () => viewer.previousPage();
+$('#next').onclick = () => viewer.nextPage();
+$('#zi').onclick = () => { viewer.currentScale = Math.min(5, viewer.currentScale + 0.1); };
+$('#zo').onclick = () => { viewer.currentScale = Math.max(0.25, viewer.currentScale - 0.1); };
+$('#zl').onclick = () => { fit = fit === 'page-width' ? 'page-fit' : 'page-width'; viewer.currentScaleValue = fit; };
+$('#exp').onclick = async () => {
+  if (!pdf) return;
+  try {
+    const out = await pdf.saveDocument();
+    const url = URL.createObjectURL(new Blob([out], {type: 'application/pdf'}));
+    const a = document.createElement('a');
+    a.href = url; a.download = meta.name.replace(/\.pdf$/i, '') + '_preenchido.pdf';
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 10000);
+    toast('PDF exportado.');
+  } catch (e) { console.error(e); toast('Não foi possível exportar.'); }
+};
+document.addEventListener('keydown', e => {
+  if (!$('#reader').classList.contains('on') || /INPUT|TEXTAREA|SELECT/.test(document.activeElement.tagName)) return;
+  if (e.key === 'ArrowLeft') viewer.previousPage();
+  if (e.key === 'ArrowRight') viewer.nextPage();
+});
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') save(); });
+window.addEventListener('pagehide', save);
+
+/* ---------- Início ---------- */
+try {
+  if (!localStorage.getItem('pdfcalc-welcome')) { $('#privacy').hidden = false; localStorage.setItem('pdfcalc-welcome', '1'); }
+} catch (e) {}
+renderHome();
+if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {});
+})();
+</script>
+</body>
+</html>
